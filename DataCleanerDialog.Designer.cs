@@ -44,6 +44,8 @@
             this.label3 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.label1 = new System.Windows.Forms.Label();
+            this.label7 = new System.Windows.Forms.Label();
+            this.txtNullValuesTable = new System.Windows.Forms.TextBox();
             this.grpColumnProperties.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -51,7 +53,7 @@
             // 
             this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnOK.DialogResult = System.Windows.Forms.DialogResult.OK;
-            this.btnOK.Location = new System.Drawing.Point(372, 263);
+            this.btnOK.Location = new System.Drawing.Point(372, 294);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 1;
@@ -63,7 +65,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(453, 263);
+            this.btnCancel.Location = new System.Drawing.Point(453, 294);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 2;
@@ -206,11 +208,30 @@
             this.label1.TabIndex = 16;
             this.label1.Text = "Operation";
             // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(12, 267);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(93, 13);
+            this.label7.TabIndex = 19;
+            this.label7.Text = "Null Values Table:";
+            // 
+            // txtNullValuesTable
+            // 
+            this.txtNullValuesTable.Location = new System.Drawing.Point(161, 264);
+            this.txtNullValuesTable.Name = "txtNullValuesTable";
+            this.txtNullValuesTable.Size = new System.Drawing.Size(367, 20);
+            this.txtNullValuesTable.TabIndex = 20;
+            this.txtNullValuesTable.TextChanged += new System.EventHandler(this.txtNullValuesTable_TextChanged);
+            // 
             // DataCleanerDialog
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(540, 298);
+            this.ClientSize = new System.Drawing.Size(540, 329);
+            this.Controls.Add(this.txtNullValuesTable);
+            this.Controls.Add(this.label7);
             this.Controls.Add(this.grpColumnProperties);
             this.Controls.Add(this.cboConnectionManager);
             this.Controls.Add(this.label6);
@@ -245,5 +266,7 @@
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.TextBox txtNullValuesTable;
     }
 }
