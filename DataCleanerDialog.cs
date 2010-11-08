@@ -14,10 +14,9 @@ namespace DataCleansing
 
     public partial class DataCleanerDialog : Form
     {
-        ////Variables _vars = null;
-        private Dictionary<string, int> _columnInfo = null;
+        private Dictionary<string, int> _columnInfo;
 
-        private bool _populatingList = false;
+        private bool _populatingList;
 
         private IDTSInputColumn100 _column;
 
@@ -45,10 +44,10 @@ namespace DataCleansing
                 }
             }
 
-            string connMgrID = ComponentMetaData.RuntimeConnectionCollection[DataCleaner.DataCleansingConnection].ConnectionManagerID;
-            if (Connections.Contains(connMgrID))
+            string connMgrId = ComponentMetaData.RuntimeConnectionCollection[DataCleaner.DataCleansingConnection].ConnectionManagerID;
+            if (Connections.Contains(connMgrId))
             {
-                cboConnectionManager.SelectedItem = Connections[connMgrID].Name;
+                cboConnectionManager.SelectedItem = Connections[connMgrId].Name;
             }
 
             chkListInputColumns.Visible = false;
@@ -57,14 +56,16 @@ namespace DataCleansing
 
             _columnInfo = new Dictionary<string, int>(virtualInput.VirtualInputColumnCollection.Count);
 
-            int itemIndex = 0;
             _populatingList = true;
             foreach (IDTSVirtualInputColumn100 virtualColumn in virtualInput.VirtualInputColumnCollection)
             {
-                itemIndex = chkListInputColumns.Items.Add(virtualColumn.Name);
+                int itemIndex = this.chkListInputColumns.Items.Add(virtualColumn.Name);
                 chkListInputColumns.SetItemChecked(itemIndex, virtualColumn.UsageType == DTSUsageType.UT_READWRITE);
                 _columnInfo.Add(virtualColumn.Name, virtualColumn.LineageID);
             }
+
+            txtNullValuesTable.Text =
+                ComponentMetaData.CustomPropertyCollection["NullDefaultTableName"].Value.ToString();
 
             _populatingList = false;
             chkListInputColumns.Visible = true;
@@ -133,18 +134,11 @@ namespace DataCleansing
             else
             {
                 var operation = Utility.GetPropertyValue<CleaningOperation>(column, "Operation");
-                for (int index = 0; index < this.chkOperations.Items.Count; index++)
+                for (int index = 0; index < chkOperations.Items.Count; index++)
                 {
-                    var item = (string)this.chkOperations.Items[index];
+                    var item = (string)chkOperations.Items[index];
                     var enumItem = (CleaningOperation)Enum.Parse(typeof(CleaningOperation), item);
-                    if (Utility.ContainsFlag(operation, enumItem))
-                    {
-                        chkOperations.SetItemChecked(index, true);
-                    }
-                    else
-                    {
-                        chkOperations.SetItemChecked(index, false);
-                    }
+                    chkOperations.SetItemChecked(index, Utility.ContainsFlag(operation, enumItem));
                 }
 
                 txtFormatString.Text = Utility.GetPropertyValue<string>(column, "FormatString");
@@ -204,7 +198,11 @@ namespace DataCleansing
                 ComponentMetaData.RuntimeConnectionCollection[DataCleaner.DataCleansingConnection].ConnectionManagerID =
                     Connections[cboConnectionManager.SelectedItem].ID;
             }
-        
+        }
+
+        private void txtNullValuesTable_TextChanged(object sender, EventArgs e)
+        {
+            ComponentMetaData.CustomPropertyCollection["NullDefaultTableName"].Value = txtNullValuesTable.Text;
         }
     }
 }

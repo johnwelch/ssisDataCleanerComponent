@@ -1,15 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Globalization;
 using Microsoft.SqlServer.Dts.Pipeline;
 using Microsoft.SqlServer.Dts.Pipeline.Wrapper;
 using Microsoft.SqlServer.Dts.Runtime.Wrapper;
 
 namespace DataCleansing
 {
-    using System.Data.SqlClient;
-
-    [DtsPipelineComponent(ComponentType = ComponentType.Transform, CurrentVersion = 0,
-        Description = "Standardizes common data cleansing operations", DisplayName = "Data Cleaner", IconResource = "",
+    [DtsPipelineComponent(ComponentType = ComponentType.Transform, 
+        CurrentVersion = 0,
+        Description = "Standardizes common data cleansing operations", 
+        DisplayName = "Data Cleaner",
+        IconResource = "DataCleansing.Brush.ico",
         UITypeName = "DataCleansing.DataCleanerUI, DataCleaner, Version=1.0.0.0, Culture=neutral, PublicKeyToken=6fb9d4add692893d")]
     public class DataCleaner : PipelineComponent
     {
@@ -17,7 +21,7 @@ namespace DataCleansing
 
         private readonly string[] _delimiters = { "," };
 
-        private List<ColumnInfo> _columnInfos = null;
+        private List<ColumnInfo> _columnInfos;
 
         private int _errorOutId;
 
@@ -25,12 +29,14 @@ namespace DataCleansing
 
         private SqlConnection _connection;
 
-        private readonly Dictionary<DataType, object> _defaultValues = new Dictionary<DataType, object>()
-            { 
-                { DataType.DT_STR, string.Empty },
-                { DataType.DT_I4, 0 },
-                { DataType.DT_DBTIMESTAMP, new DateTime(1950, 01, 01) }
-            };
+        ////private readonly Dictionary<DataType, object> _defaultValues = new Dictionary<DataType, object>()
+        ////    { 
+        ////        { DataType.DT_STR, string.Empty },
+        ////        { DataType.DT_I4, 0 },
+        ////        { DataType.DT_DBTIMESTAMP, new DateTime(1950, 01, 01) }
+        ////    };
+
+        private Dictionary<DataType, object> _defaultValues;
 
         #region Design Time
 
@@ -70,6 +76,9 @@ namespace DataCleansing
             var conn = this.ComponentMetaData.RuntimeConnectionCollection.New();
             conn.Name = DataCleansingConnection;
             conn.Description = "ADO.NET Connection to SQL Server";
+
+            // Add Null Default Table Name
+            Utility.AddProperty(ComponentMetaData.CustomPropertyCollection, "NullDefaultTableName", "The name of the table that stores NULL value defaults.", string.Empty);
         }
 
         public override IDTSInput100 InsertInput(DTSInsertPlacement insertPlacement, int inputID)
@@ -112,6 +121,14 @@ namespace DataCleansing
         {
             bool hasError = false;
             bool cancel;
+
+                if (ComponentMetaData.CustomPropertyCollection["NullDefaultTableName"].Value == null ||
+                    ComponentMetaData.CustomPropertyCollection["NullDefaultTableName"].Value.ToString() == string.Empty)
+            {
+                ComponentMetaData.FireError(0, string.Empty, "The NullDefaultTableName property must be set.", string.Empty, 0, out cancel);
+                hasError = true;
+            }
+
             foreach (IDTSInputColumn100 column in ComponentMetaData.InputCollection[0].InputColumnCollection)
             {
                 CleaningOperation operation = CleaningOperation.None;
@@ -203,30 +220,7 @@ namespace DataCleansing
 
         public override void PreExecute()
         {
-            _columnInfos = new List<ColumnInfo>(this.ComponentMetaData.InputCollection[0].InputColumnCollection.Count);
-
-            IDTSInput100 input = this.ComponentMetaData.InputCollection[0];
-
-            // Look at each input, and then each column, storing important metadata.
-            foreach (IDTSInputColumn100 col in input.InputColumnCollection)
-            {
-                // Find the position in buffers that this column will take, and add it to the map.
-                var columnInfo = new ColumnInfo(
-                    col.Name,
-                    col.DataType,
-                    this.BufferManager.FindColumnByLineageID(input.Buffer, col.LineageID),
-                    col.Length,
-                    col.Precision,
-                    col.Scale);
-                columnInfo.Operation = (CleaningOperation)col.CustomPropertyCollection["Operation"].Value;
-                columnInfo.FormatString = col.CustomPropertyCollection["FormatString"].Value.ToString();
-                columnInfo.MinValue = (int)col.CustomPropertyCollection["MinValue"].Value;
-                columnInfo.MaxValue = (int)col.CustomPropertyCollection["MaxValue"].Value;
-                columnInfo.ValueList = col.CustomPropertyCollection["ValueList"].Value.ToString().Split(
-                    _delimiters, StringSplitOptions.RemoveEmptyEntries);
-
-                _columnInfos.Add(columnInfo);
-            }
+            _columnInfos = CacheBufferInfo();
 
             foreach (IDTSOutput100 output in this.ComponentMetaData.OutputCollection)
             {
@@ -240,6 +234,9 @@ namespace DataCleansing
                     _outputId = output.ID;
                 }
             }
+
+            // Get Null Default Values
+            _defaultValues = GetDefaultValues();
         }
 
         public override void ProcessInput(int inputID, PipelineBuffer buffer)
@@ -355,6 +352,56 @@ namespace DataCleansing
         #endregion
 
         #region Helpers
+
+        private List<ColumnInfo> CacheBufferInfo()
+        {
+            var columns = new List<ColumnInfo>(this.ComponentMetaData.InputCollection[0].InputColumnCollection.Count);
+            IDTSInput100 input = this.ComponentMetaData.InputCollection[0];
+
+            // Look at each input, and then each column, storing important metadata.
+            foreach (IDTSInputColumn100 col in input.InputColumnCollection)
+            {
+                // Find the position in buffers that this column will take, and add it to the map.
+                var columnInfo = new ColumnInfo(
+                    col.Name,
+                    col.DataType,
+                    this.BufferManager.FindColumnByLineageID(input.Buffer, col.LineageID),
+                    col.Length,
+                    col.Precision,
+                    col.Scale);
+                columnInfo.Operation = (CleaningOperation)col.CustomPropertyCollection["Operation"].Value;
+                columnInfo.FormatString = col.CustomPropertyCollection["FormatString"].Value.ToString();
+                columnInfo.MinValue = (int)col.CustomPropertyCollection["MinValue"].Value;
+                columnInfo.MaxValue = (int)col.CustomPropertyCollection["MaxValue"].Value;
+                columnInfo.ValueList = col.CustomPropertyCollection["ValueList"].Value.ToString().Split(
+                    this._delimiters, StringSplitOptions.RemoveEmptyEntries);
+
+                columns.Add(columnInfo);
+            }
+
+            return columns;
+        }
+
+        private Dictionary<DataType, object> GetDefaultValues()
+        {
+            var defaultValues = new Dictionary<DataType, object>();
+            var query = string.Format(
+                "SELECT DataType, Value FROM {0}",
+                ComponentMetaData.CustomPropertyCollection["NullDefaultTableName"].Value);
+            var adapter = new SqlDataAdapter(query, _connection);
+            var dataTable = new DataTable() { Locale = CultureInfo.CurrentCulture };
+
+            adapter.Fill(dataTable);
+            foreach (DataRow row in dataTable.Rows)
+            {
+                bool isLong = false;
+                var dataType = (DataType)Enum.Parse(typeof(DataType), row["DataType"].ToString());
+                object value = Convert.ChangeType(row["Value"], BufferTypeToDataRecordType(ConvertBufferDataTypeToFitManaged(dataType, ref isLong)));
+                defaultValues.Add(dataType, value);
+            }
+
+            return defaultValues;
+        }
 
         private static object GetBufferColumnValue(PipelineBuffer buffer, ColumnInfo col)
         {
